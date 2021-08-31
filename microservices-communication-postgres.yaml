@@ -1,0 +1,365 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: microservices-api
+    version: postgres-v1
+  name: postgres-deployment
+  namespace: default
+spec:
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: microservices-api
+      version: postgres-v1
+  template:
+    metadata:
+      labels:
+        app: microservices-api
+        version: postgres-v1
+    spec:
+      containers:
+      - name: postgres-pod
+        image: postgres
+        imagePullPolicy: "Always"
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-db-password
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - mountPath: /cache
+          name: cache-volume              
+      volumes:
+      - name: cache-volume
+        emptyDir: {}              
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: microservices-api
+    version: postgres-v1
+  name: postgres-service
+  namespace: default
+spec:
+  ports:
+  - name: http
+    port: 5432
+    protocol: TCP
+    targetPort: 5432
+  selector: #  The Service selects the backend containers by their labels
+    app: microservices-api
+    version: postgres-v1
+  sessionAffinity: None
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: microservices-api
+    version: procucer-v1
+  name: procucer-api-deployment
+  namespace: default
+spec:
+  replicas: 3
+  minReadySeconds: 60
+  selector:
+    matchLabels:
+      app: microservices-api
+      version: procucer-v1
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: microservices-api
+        version: procucer-v1
+    spec:
+      containers:
+      - image: nityachinmaya/producer:postgresql
+        imagePullPolicy: IfNotPresent
+        name: procucer-pod
+        ports:
+        - containerPort: 8443
+        env:
+        - name: RDS_HOSTNAME
+          value: 35.223.60.133
+        - name: RDS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-db-password
+              key: POSTGRES_PASSWORD
+        resources:
+          limits:
+            cpu: 250m # 1000m means 1 vCPU (AWS) or 1 CPU Core (Azure)
+            memory: 512Mi
+          requests: # Requests are what the container is guaranteed to get
+            cpu: 100m
+            memory: 256Mi
+        readinessProbe:
+          httpGet:
+            path: /producer/actuator/health
+            port: 8443
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30
+        livenessProbe:
+          httpGet:
+            path: /producer/actuator/health
+            port: 8443
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30                
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: microservices-api
+    version: procucer-v1
+  name: procucer-service
+  namespace: default
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 8443
+  selector: #  The Service selects the backend containers by their labels
+    app: microservices-api
+    version: procucer-v1
+  sessionAffinity: None
+  type: NodePort  # A NodePort exposes the service on a static port on the node’s IP address. The Kubernetes control plane will allocate a port from a range (default: 30000-32767)
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  labels:
+    app: microservices-api
+    version: procucer-v1
+  name: procucer-api-asg
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: procucer-api-deployment
+  minReplicas: 3
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 50
+---  
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: microservices-api
+    version: consumer-v1
+  name: consumer-api-deployment
+  namespace: default
+spec:
+  replicas: 3
+  minReadySeconds: 60
+  selector:
+    matchLabels:
+      app: microservices-api
+      version: consumer-v1
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: microservices-api
+        version: consumer-v1
+    spec:
+      containers:
+      - image: nityachinmaya/consumer:1.0.0
+        imagePullPolicy: IfNotPresent
+        name: consumer-pod
+        env:
+          - name: PRODUCER_SERVICE_HOST
+            value: https://api.learnwithchinmay.ga  # gateway-ingress IP address or alias
+        ports:
+        - containerPort: 8443  
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        readinessProbe:
+          httpGet:
+            path: /consumer/actuator/health
+            port: 8443
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30              
+        livenessProbe:
+          httpGet:
+            path: /consumer/actuator/health
+            port: 8443
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30              
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: microservices-api
+    version: consumer-v1
+  name: consumer-service
+  namespace: default
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app: microservices-api
+    version: consumer-v1
+  sessionAffinity: None
+  type: NodePort 
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  labels:
+    app: microservices-api
+    version: consumer-v1
+  name: consumer-api-asg
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: consumer-api-deployment
+  minReplicas: 3
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 50
+---    
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    app: microservices-api
+  name: gateway-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: gce
+    networking.gke.io/managed-certificates: learnwithchinmay-certificate
+    networking.gke.io/v1beta1.FrontendConfig: ssl-redirect
+spec:
+  defaultBackend:
+    service:
+      name: default-http-backend
+      port:
+        number: 80
+  rules:
+  - http:
+      paths:
+      - path: /producer/*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: procucer-service
+            port: 
+              number: 80
+      - path: /consumer/*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: consumer-service
+            port:
+              number: 80
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: learnwithchinmay-certificate
+spec:
+  domains:
+    - learnwithchinmay.ga
+    - api.learnwithchinmay.ga
+---
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: ssl-redirect
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT # return a 301 redirect response code (default if responseCodeName is unspecified)
+--- 
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-network-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: microservices-api
+      version: postgres-v1
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: microservices-api
+          version: procucer-v1   
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+# Below code is for Default backend for Ingress (i.e., https://learnwithchinmay.ga  OR  34.149.213.47)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: default-response-pod-for-ingress
+  labels:
+    app: microservices-api
+    version: nginx
+spec:
+  containers:
+  - name: default-response-pod-for-ingress
+    image: nginx
+    ports:
+      - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: default-http-backend # This is the default backend for ingress
+spec:
+  type: NodePort
+  selector:
+    app: microservices-api
+    version: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80       
+

@@ -1,0 +1,13 @@
+{
+	"AWSEBDockerrunVersion": "1",
+	"Image": {
+		"Name": "nityachinmaya/producer:1.0.0",
+		"Update": "true"
+	},
+	"Ports": [
+		{
+          "hostPort": "80",
+          "containerPort": "8443"
+		}
+	]
+}

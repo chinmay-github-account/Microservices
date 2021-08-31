@@ -1,0 +1,67 @@
+version: '3.9'
+services:
+    db:
+        container_name: pg_container
+        image: postgres
+        restart: always
+        environment:
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        # volumes:  # volumes tag is used to mount a folder from the host machine to the container
+        #   - postgres-data:/var/lib/postgresql/data   # the first part is the path in the host machine and the second part is the path in the container
+        ports:
+            - "5432:5432"
+        networks:
+            - local-bridge-network
+
+    pgadmin:
+        container_name: pgadmin4_container
+        image: dpage/pgadmin4
+        restart: always
+        environment:
+            PGADMIN_DEFAULT_EMAIL: admin@admin.com
+            PGADMIN_DEFAULT_PASSWORD: root
+        ports:
+            - "5050:80"
+        networks:
+            - local-bridge-network 
+
+    producer-service:
+        container_name: producer-service
+        image: producer:latest
+        depends_on:
+            - db
+        environment:
+            RDS_HOSTNAME: host.docker.internal
+            RDS_PASSWORD: ${POSTGRES_PASSWORD}
+        ports:
+            - 8443:8443
+        networks:
+            - local-bridge-network
+
+    consumer-service:
+        container_name: consumer-service
+        image: consumer:latest
+        depends_on:
+            - db
+            - producer-service
+        environment:
+            PRODUCER_SERVICE_HOST: http://producer-service:8443
+            SERVER_PORT: 8080
+        ports:
+            - 80:8080
+        networks:
+            - local-bridge-network
+# volumes:
+#     postgres-data:   
+
+networks:
+    local-bridge-network:
+      name: local-bridge-network
+      driver: bridge  
+
+# For PgAdmin Use below:
+# -----------------------
+# host: host.docker.internal
+# database: postgres
+# user: postgres
+# password:       
