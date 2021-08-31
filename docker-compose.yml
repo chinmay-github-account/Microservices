@@ -5,7 +5,7 @@ services:
         image: postgres
         restart: always
         environment:
-            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Inject from .env file
         # volumes:  # volumes tag is used to mount a folder from the host machine to the container
         #   - postgres-data:/var/lib/postgresql/data   # the first part is the path in the host machine and the second part is the path in the container
         ports:
