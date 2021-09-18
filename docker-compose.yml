@@ -27,7 +27,7 @@ services:
 
     producer-service:
         container_name: producer-service
-        image: producer:latest
+        image: nityachinmaya/producer:postgresql
         depends_on:
             - db
         environment:
@@ -40,7 +40,7 @@ services:
 
     consumer-service:
         container_name: consumer-service
-        image: consumer:latest
+        image: nityachinmaya/consumer:1.0.0
         depends_on:
             - db
             - producer-service
