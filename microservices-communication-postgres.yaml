@@ -40,7 +40,7 @@ spec:
           name: cache-volume              
       volumes:
       - name: cache-volume
-        emptyDir: {}              
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -361,5 +361,4 @@ spec:
   ports:
     - protocol: TCP
       port: 80
-      targetPort: 80       
-
+      targetPort: 80
