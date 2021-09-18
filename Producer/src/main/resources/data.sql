@@ -13,3 +13,23 @@ INSERT INTO cars (manufacturer, model, build) VALUES
   ('Tesla', 'Cybertruck', 2019),
   ('Hyundai', 'Creta', 2021),
   ('Suzuki', 'Swift', 2020);
+  
+ /*
+  	CREATE SEQUENCE seq ;
+
+	CREATE TABLE cars (
+	  id INT NOT NULL DEFAULT nextval('seq')  PRIMARY KEY,
+	  manufacturer VARCHAR(250) NOT NULL,
+	  model VARCHAR(250) NOT NULL,
+	  build INT DEFAULT NULL
+	);
+	
+	INSERT INTO cars (manufacturer, model, build) VALUES
+	  ('Ford', 'Model T', 2001),
+	  ('Tesla', 'Model 3', 2017),
+	  ('Tesla', 'Cybertruck', 2019),
+	  ('Hyundai', 'Creta', 2021),
+	  ('Suzuki', 'Swift', 2020);
+	  
+	 select * from cars ;
+ */
